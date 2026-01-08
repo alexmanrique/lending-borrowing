@@ -148,4 +148,23 @@ contract LendingProtocolTest is Test {
         lendingProtocol.withdraw(address(testToken), 1000);
         vm.stopPrank();
     }
+
+    function testWithdraw() public {
+        lendingProtocol.addMarket(address(testToken), DEFAULT_COLLATERAL_FACTOR, DEFAULT_SUPPLY_RATE, DEFAULT_BORROW_RATE);
+        testToken.mint(USER_1, 1000);
+        vm.startPrank(USER_1);
+        testToken.approve(address(lendingProtocol), 1000);
+        lendingProtocol.deposit(address(testToken), 1000);
+        lendingProtocol.withdraw(address(testToken), 1000);
+        vm.stopPrank();
+        LendingProtocol.User memory user = lendingProtocol.getUser(USER_1);
+        assertEq(user.totalDeposited, 0);
+        assertEq(user.totalBorrowed, 0);
+        assertEq(user.lastUpdateTime, block.timestamp);
+        assertEq(user.isActive, false);
+        assertEq(lendingProtocol.getMarket(address(testToken)).totalSupply, 0);
+        assertEq(lendingProtocol.getMarket(address(testToken)).totalBorrow, 0);
+    }
+
+    
 }
