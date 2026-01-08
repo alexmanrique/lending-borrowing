@@ -150,7 +150,9 @@ contract LendingProtocolTest is Test {
     }
 
     function testWithdraw() public {
-        lendingProtocol.addMarket(address(testToken), DEFAULT_COLLATERAL_FACTOR, DEFAULT_SUPPLY_RATE, DEFAULT_BORROW_RATE);
+        lendingProtocol.addMarket(
+            address(testToken), DEFAULT_COLLATERAL_FACTOR, DEFAULT_SUPPLY_RATE, DEFAULT_BORROW_RATE
+        );
         testToken.mint(USER_1, 1000);
         vm.startPrank(USER_1);
         testToken.approve(address(lendingProtocol), 1000);
@@ -166,5 +168,38 @@ contract LendingProtocolTest is Test {
         assertEq(lendingProtocol.getMarket(address(testToken)).totalBorrow, 0);
     }
 
-    
+    function testBorrowInvalidAmount() public {
+        lendingProtocol.addMarket(
+            address(testToken), DEFAULT_COLLATERAL_FACTOR, DEFAULT_SUPPLY_RATE, DEFAULT_BORROW_RATE
+        );
+        vm.expectRevert("Amount must be greater than 0");
+        lendingProtocol.borrow(address(testToken), 0);
+    }
+
+    function testBorrowInsufficientLiquidity() public {
+        lendingProtocol.addMarket(
+            address(testToken), DEFAULT_COLLATERAL_FACTOR, DEFAULT_SUPPLY_RATE, DEFAULT_BORROW_RATE
+        );
+        vm.expectRevert("Insufficient liquidity");
+        lendingProtocol.borrow(address(testToken), 1000);
+    }
+
+    function testBorrowWouldMakePositionUnsafe() public {
+        lendingProtocol.addMarket(
+            address(testToken), DEFAULT_COLLATERAL_FACTOR, DEFAULT_SUPPLY_RATE, DEFAULT_BORROW_RATE
+        );
+        testToken.mint(USER_1, 1000);
+        vm.startPrank(USER_1);
+        testToken.approve(address(lendingProtocol), 1000);
+        lendingProtocol.deposit(address(testToken), 1000);
+        // With 1000 deposited and 80% collateral factor, collateral value is 800
+        // Maximum total borrow allowed: 800 * 10000 / 8000 = 1000 tokens
+        // Borrowing 800 tokens first
+        lendingProtocol.borrow(address(testToken), 800);
+        // Trying to borrow 201 more tokens (total 1001) would exceed the limit
+        // Ratio would be: 800/1001 ≈ 79.9% < 80% threshold
+        vm.expectRevert("Borrow would exceed collateral limit");
+        lendingProtocol.borrow(address(testToken), 201);
+        vm.stopPrank();
+    }
 }
