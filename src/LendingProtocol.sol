@@ -24,40 +24,40 @@ contract LendingProtocol is ReentrancyGuard, Pausable, Ownable {
 
     // Structs
     struct User {
-        uint256 totalDeposited;      // Total amount deposited by user
-        uint256 totalBorrowed;       // Total amount borrowed by user
-        uint256 lastUpdateTime;      // Last time user's data was updated
-        bool isActive;               // Whether user has active positions
+        uint256 totalDeposited; // Total amount deposited by user
+        uint256 totalBorrowed; // Total amount borrowed by user
+        uint256 lastUpdateTime; // Last time user's data was updated
+        bool isActive; // Whether user has active positions
     }
 
     struct Market {
-        IERC20 token;                // The token being lent/borrowed
-        uint256 totalSupply;         // Total amount supplied to this market
-        uint256 totalBorrow;         // Total amount borrowed from this market
-        uint256 supplyRate;          // Current supply rate (APY in basis points)
-        uint256 borrowRate;          // Current borrow rate (APY in basis points)
-        uint256 collateralFactor;    // Collateral factor (0-10000, where 10000 = 100%)
-        bool isActive;               // Whether this market is active
+        IERC20 token; // The token being lent/borrowed
+        uint256 totalSupply; // Total amount supplied to this market
+        uint256 totalBorrow; // Total amount borrowed from this market
+        uint256 supplyRate; // Current supply rate (APY in basis points)
+        uint256 borrowRate; // Current borrow rate (APY in basis points)
+        uint256 collateralFactor; // Collateral factor (0-10000, where 10000 = 100%)
+        bool isActive; // Whether this market is active
     }
 
     struct SignatureData {
-        uint256 nonce;               // Unique nonce for signature
-        uint256 deadline;            // Signature expiration time
-        bytes signature;             // ECDSA signature
+        uint256 nonce; // Unique nonce for signature
+        uint256 deadline; // Signature expiration time
+        bytes signature; // ECDSA signature
     }
 
     // State variables
     mapping(address => User) public users;
     mapping(address => mapping(address => uint256)) public userDeposits; // user => token => amount
-    mapping(address => mapping(address => uint256)) public userBorrows;  // user => token => amount
+    mapping(address => mapping(address => uint256)) public userBorrows; // user => token => amount
     mapping(address => Market) public markets;
     mapping(address => uint256) public userNonces;
-    
+
     address[] public supportedTokens;
     uint256 public constant LIQUIDATION_THRESHOLD = 8000; // 80% in basis points
-    uint256 public constant LIQUIDATION_PENALTY = 500;    // 5% in basis points
+    uint256 public constant LIQUIDATION_PENALTY = 500; // 5% in basis points
     uint256 public constant BASIS_POINTS = 10000;
-    
+
     // Events
     event MarketAdded(address indexed token, uint256 collateralFactor);
     event MarketUpdated(address indexed token, uint256 collateralFactor);
@@ -70,22 +70,33 @@ contract LendingProtocol is ReentrancyGuard, Pausable, Ownable {
 
     // Modifiers
     modifier onlyActiveMarket(address token) {
-        require(markets[token].isActive, "Market not active");
+        _onlyActiveMarket(token);
         _;
     }
 
+    function _onlyActiveMarket(address token) private view {
+        require(markets[token].isActive, "Market not active");
+    }
+
     modifier onlyValidSignature(SignatureData calldata sigData) {
+        _onlyValidSignatureBefore(sigData);
+        _;
+        _onlyValidSignatureAfter();
+    }
+
+    function _onlyValidSignatureBefore(SignatureData calldata sigData) internal view{
         require(block.timestamp <= sigData.deadline, "Signature expired");
         require(userNonces[msg.sender] == sigData.nonce, "Invalid nonce");
-        _;
+    }
+
+    function _onlyValidSignatureAfter() internal {
         userNonces[msg.sender]++;
     }
 
     /**
      * @dev Constructor to initialize the protocol
      */
-    constructor() Ownable(msg.sender) {
-    }
+    constructor() Ownable(msg.sender) {}
 
     /**
      * @dev Add a new market to the protocol
@@ -94,12 +105,10 @@ contract LendingProtocol is ReentrancyGuard, Pausable, Ownable {
      * @param initialSupplyRate Initial supply rate in basis points
      * @param initialBorrowRate Initial borrow rate in basis points
      */
-    function addMarket(
-        address token,
-        uint256 collateralFactor,
-        uint256 initialSupplyRate,
-        uint256 initialBorrowRate
-    ) external onlyOwner {
+    function addMarket(address token, uint256 collateralFactor, uint256 initialSupplyRate, uint256 initialBorrowRate)
+        external
+        onlyOwner
+    {
         require(token != address(0), "Invalid token address");
         require(collateralFactor <= BASIS_POINTS, "Invalid collateral factor");
         require(!markets[token].isActive, "Market already exists");
@@ -125,18 +134,17 @@ contract LendingProtocol is ReentrancyGuard, Pausable, Ownable {
      * @param supplyRate New supply rate
      * @param borrowRate New borrow rate
      */
-    function updateMarket(
-        address token,
-        uint256 collateralFactor,
-        uint256 supplyRate,
-        uint256 borrowRate
-    ) external onlyOwner onlyActiveMarket(token) {
+    function updateMarket(address token, uint256 collateralFactor, uint256 supplyRate, uint256 borrowRate)
+        external
+        onlyOwner
+        onlyActiveMarket(token)
+    {
         require(collateralFactor <= BASIS_POINTS, "Invalid collateral factor");
-        
+
         markets[token].collateralFactor = collateralFactor;
         markets[token].supplyRate = supplyRate;
         markets[token].borrowRate = borrowRate;
-        
+
         emit MarketUpdated(token, collateralFactor);
         emit RatesUpdated(token, supplyRate, borrowRate);
     }
@@ -146,23 +154,18 @@ contract LendingProtocol is ReentrancyGuard, Pausable, Ownable {
      * @param token The token to deposit
      * @param amount The amount to deposit
      */
-    function deposit(address token, uint256 amount) 
-        external 
-        nonReentrant 
-        whenNotPaused 
-        onlyActiveMarket(token) 
-    {
+    function deposit(address token, uint256 amount) external nonReentrant whenNotPaused onlyActiveMarket(token) {
         require(amount > 0, "Amount must be greater than 0");
-        
+
         IERC20(token).safeTransferFrom(msg.sender, address(this), amount);
-        
+
         userDeposits[msg.sender][token] += amount;
         users[msg.sender].totalDeposited += amount;
         users[msg.sender].lastUpdateTime = block.timestamp;
         users[msg.sender].isActive = true;
-        
+
         markets[token].totalSupply += amount;
-        
+
         emit Deposit(msg.sender, token, amount);
     }
 
@@ -171,28 +174,23 @@ contract LendingProtocol is ReentrancyGuard, Pausable, Ownable {
      * @param token The token to withdraw
      * @param amount The amount to withdraw
      */
-    function withdraw(address token, uint256 amount) 
-        external 
-        nonReentrant 
-        whenNotPaused 
-        onlyActiveMarket(token) 
-    {
+    function withdraw(address token, uint256 amount) external nonReentrant whenNotPaused onlyActiveMarket(token) {
         require(amount > 0, "Amount must be greater than 0");
         require(userDeposits[msg.sender][token] >= amount, "Insufficient deposit");
         require(canWithdraw(msg.sender, token, amount), "Withdrawal would make position unsafe");
-        
+
         userDeposits[msg.sender][token] -= amount;
         users[msg.sender].totalDeposited -= amount;
         users[msg.sender].lastUpdateTime = block.timestamp;
-        
+
         if (users[msg.sender].totalDeposited == 0) {
             users[msg.sender].isActive = false;
         }
-        
+
         markets[token].totalSupply -= amount;
-        
+
         IERC20(token).safeTransfer(msg.sender, amount);
-        
+
         emit Withdraw(msg.sender, token, amount);
     }
 
@@ -201,25 +199,20 @@ contract LendingProtocol is ReentrancyGuard, Pausable, Ownable {
      * @param token The token to borrow
      * @param amount The amount to borrow
      */
-    function borrow(address token, uint256 amount) 
-        external 
-        nonReentrant 
-        whenNotPaused 
-        onlyActiveMarket(token) 
-    {
+    function borrow(address token, uint256 amount) external nonReentrant whenNotPaused onlyActiveMarket(token) {
         require(amount > 0, "Amount must be greater than 0");
         require(markets[token].totalSupply >= amount, "Insufficient liquidity");
         require(canBorrow(msg.sender, token, amount), "Borrow would exceed collateral limit");
-        
+
         userBorrows[msg.sender][token] += amount;
         users[msg.sender].totalBorrowed += amount;
         users[msg.sender].lastUpdateTime = block.timestamp;
         users[msg.sender].isActive = true;
-        
+
         markets[token].totalBorrow += amount;
-        
+
         IERC20(token).safeTransfer(msg.sender, amount);
-        
+
         emit Borrow(msg.sender, token, amount);
     }
 
@@ -228,27 +221,22 @@ contract LendingProtocol is ReentrancyGuard, Pausable, Ownable {
      * @param token The token to repay
      * @param amount The amount to repay
      */
-    function repay(address token, uint256 amount) 
-        external 
-        nonReentrant 
-        whenNotPaused 
-        onlyActiveMarket(token) 
-    {
+    function repay(address token, uint256 amount) external nonReentrant whenNotPaused onlyActiveMarket(token) {
         require(amount > 0, "Amount must be greater than 0");
         require(userBorrows[msg.sender][token] >= amount, "Insufficient borrow");
-        
+
         IERC20(token).safeTransferFrom(msg.sender, address(this), amount);
-        
+
         userBorrows[msg.sender][token] -= amount;
         users[msg.sender].totalBorrowed -= amount;
         users[msg.sender].lastUpdateTime = block.timestamp;
-        
+
         if (users[msg.sender].totalBorrowed == 0) {
             users[msg.sender].isActive = false;
         }
-        
+
         markets[token].totalBorrow -= amount;
-        
+
         emit Repay(msg.sender, token, amount);
     }
 
@@ -258,41 +246,31 @@ contract LendingProtocol is ReentrancyGuard, Pausable, Ownable {
      * @param amount The amount to deposit
      * @param sigData Signature data for verification
      */
-    function depositWithSignature(
-        address token,
-        uint256 amount,
-        SignatureData calldata sigData
-    ) 
-        external 
-        nonReentrant 
-        whenNotPaused 
-        onlyActiveMarket(token) 
-        onlyValidSignature(sigData) 
+    function depositWithSignature(address token, uint256 amount, SignatureData calldata sigData)
+        external
+        nonReentrant
+        whenNotPaused
+        onlyActiveMarket(token)
+        onlyValidSignature(sigData)
     {
         require(amount > 0, "Amount must be greater than 0");
-        
+
         // Verify signature
-        bytes32 messageHash = keccak256(abi.encodePacked(
-            "deposit",
-            token,
-            amount,
-            sigData.nonce,
-            sigData.deadline
-        ));
+        bytes32 messageHash = keccak256(abi.encodePacked("deposit", token, amount, sigData.nonce, sigData.deadline));
         bytes32 ethSignedMessageHash = MessageHashUtils.toEthSignedMessageHash(messageHash);
         address signer = ethSignedMessageHash.recover(sigData.signature);
         require(signer == msg.sender, "Invalid signature");
         require(signer != address(0), "Invalid signature2");
-        
+
         IERC20(token).safeTransferFrom(msg.sender, address(this), amount);
-        
+
         userDeposits[msg.sender][token] += amount;
         users[msg.sender].totalDeposited += amount;
         users[msg.sender].lastUpdateTime = block.timestamp;
         users[msg.sender].isActive = true;
-        
+
         markets[token].totalSupply += amount;
-        
+
         emit Deposit(msg.sender, token, amount);
     }
 
@@ -302,39 +280,39 @@ contract LendingProtocol is ReentrancyGuard, Pausable, Ownable {
      * @param token The token to liquidate
      * @param amount The amount to liquidate
      */
-    function liquidate(address user, address token, uint256 amount) 
-        external 
-        nonReentrant 
-        whenNotPaused 
-        onlyActiveMarket(token) 
+    function liquidate(address user, address token, uint256 amount)
+        external
+        nonReentrant
+        whenNotPaused
+        onlyActiveMarket(token)
     {
         require(amount > 0, "Amount must be greater than 0");
         require(userBorrows[user][token] >= amount, "Insufficient borrow to liquidate");
         require(isLiquidatable(user), "Position is not liquidatable");
-        
+
         uint256 collateralToSeize = (amount * (BASIS_POINTS + LIQUIDATION_PENALTY)) / BASIS_POINTS;
-        
+
         // Find collateral token to seize
         address collateralToken = findBestCollateral(user);
         require(collateralToken != address(0), "No collateral to seize");
         require(userDeposits[user][collateralToken] >= collateralToSeize, "Insufficient collateral");
-        
+
         // Transfer borrowed tokens from liquidator
         IERC20(token).safeTransferFrom(msg.sender, address(this), amount);
-        
+
         // Update user's borrow
         userBorrows[user][token] -= amount;
         users[user].totalBorrowed -= amount;
         markets[token].totalBorrow -= amount;
-        
+
         // Seize collateral
         userDeposits[user][collateralToken] -= collateralToSeize;
         users[user].totalDeposited -= collateralToSeize;
         markets[collateralToken].totalSupply -= collateralToSeize;
-        
+
         // Transfer collateral to liquidator
         IERC20(collateralToken).safeTransfer(msg.sender, collateralToSeize);
-        
+
         emit Liquidate(msg.sender, user, token, amount);
     }
 
@@ -346,23 +324,23 @@ contract LendingProtocol is ReentrancyGuard, Pausable, Ownable {
     function getCollateralizationRatio(address user) public view returns (uint256 ratio) {
         uint256 totalCollateralValue = 0;
         uint256 totalBorrowValue = 0;
-        
+
         for (uint256 i = 0; i < supportedTokens.length; i++) {
             address token = supportedTokens[i];
             if (markets[token].isActive) {
                 uint256 depositAmount = userDeposits[user][token];
                 uint256 borrowAmount = userBorrows[user][token];
-                
+
                 if (depositAmount > 0) {
                     totalCollateralValue += (depositAmount * markets[token].collateralFactor) / BASIS_POINTS;
                 }
-                
+
                 if (borrowAmount > 0) {
                     totalBorrowValue += borrowAmount;
                 }
             }
         }
-        
+
         if (totalBorrowValue == 0) return type(uint256).max;
         return (totalCollateralValue * BASIS_POINTS) / totalBorrowValue;
     }
@@ -377,31 +355,31 @@ contract LendingProtocol is ReentrancyGuard, Pausable, Ownable {
     function canWithdraw(address user, address token, uint256 amount) public view returns (bool) {
         uint256 currentRatio = getCollateralizationRatio(user);
         if (currentRatio == type(uint256).max) return true;
-        
+
         // Calculate new ratio after withdrawal
         uint256 newCollateralValue = 0;
         uint256 totalBorrowValue = 0;
-        
+
         for (uint256 i = 0; i < supportedTokens.length; i++) {
             address supportedToken = supportedTokens[i];
             if (markets[supportedToken].isActive) {
                 uint256 depositAmount = userDeposits[user][supportedToken];
                 uint256 borrowAmount = userBorrows[user][supportedToken];
-                
+
                 if (supportedToken == token) {
                     depositAmount = depositAmount > amount ? depositAmount - amount : 0;
                 }
-                
+
                 if (depositAmount > 0) {
                     newCollateralValue += (depositAmount * markets[supportedToken].collateralFactor) / BASIS_POINTS;
                 }
-                
+
                 if (borrowAmount > 0) {
                     totalBorrowValue += borrowAmount;
                 }
             }
         }
-        
+
         if (totalBorrowValue == 0) return true;
         uint256 newRatio = (newCollateralValue * BASIS_POINTS) / totalBorrowValue;
         return newRatio >= LIQUIDATION_THRESHOLD;
@@ -417,31 +395,31 @@ contract LendingProtocol is ReentrancyGuard, Pausable, Ownable {
     function canBorrow(address user, address token, uint256 amount) public view returns (bool) {
         uint256 currentRatio = getCollateralizationRatio(user);
         if (currentRatio == type(uint256).max) return true;
-        
+
         // Calculate new ratio after borrow
         uint256 totalCollateralValue = 0;
         uint256 totalBorrowValue = 0;
-        
+
         for (uint256 i = 0; i < supportedTokens.length; i++) {
             address supportedToken = supportedTokens[i];
             if (markets[supportedToken].isActive) {
                 uint256 depositAmount = userDeposits[user][supportedToken];
                 uint256 borrowAmount = userBorrows[user][supportedToken];
-                
+
                 if (supportedToken == token) {
                     borrowAmount += amount;
                 }
-                
+
                 if (depositAmount > 0) {
                     totalCollateralValue += (depositAmount * markets[supportedToken].collateralFactor) / BASIS_POINTS;
                 }
-                
+
                 if (borrowAmount > 0) {
                     totalBorrowValue += borrowAmount;
                 }
             }
         }
-        
+
         if (totalBorrowValue == 0) return true;
         uint256 newRatio = (totalCollateralValue * BASIS_POINTS) / totalBorrowValue;
         return newRatio >= LIQUIDATION_THRESHOLD;
@@ -465,7 +443,7 @@ contract LendingProtocol is ReentrancyGuard, Pausable, Ownable {
     function findBestCollateral(address user) internal view returns (address) {
         address bestToken = address(0);
         uint256 bestValue = 0;
-        
+
         for (uint256 i = 0; i < supportedTokens.length; i++) {
             address token = supportedTokens[i];
             if (markets[token].isActive && userDeposits[user][token] > 0) {
@@ -476,7 +454,7 @@ contract LendingProtocol is ReentrancyGuard, Pausable, Ownable {
                 }
             }
         }
-        
+
         return bestToken;
     }
 
