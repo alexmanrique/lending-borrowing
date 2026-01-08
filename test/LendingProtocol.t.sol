@@ -58,7 +58,9 @@ contract LendingProtocolTest is Test {
 
     function testUpdateMarket() public {
         lendingProtocol.addMarket(TEST_TOKEN_1, DEFAULT_COLLATERAL_FACTOR, DEFAULT_SUPPLY_RATE, DEFAULT_BORROW_RATE);
-        lendingProtocol.updateMarket(TEST_TOKEN_1, DEFAULT_COLLATERAL_FACTOR, DEFAULT_SUPPLY_RATE + 1, DEFAULT_BORROW_RATE + 1);
+        lendingProtocol.updateMarket(
+            TEST_TOKEN_1, DEFAULT_COLLATERAL_FACTOR, DEFAULT_SUPPLY_RATE + 1, DEFAULT_BORROW_RATE + 1
+        );
         LendingProtocol.Market memory market = lendingProtocol.getMarket(address(TEST_TOKEN_1));
         assertEq(market.isActive, true);
         assertEq(market.totalSupply, 0);
@@ -67,6 +69,4 @@ contract LendingProtocolTest is Test {
         assertEq(market.borrowRate, DEFAULT_BORROW_RATE + 1);
         assertEq(market.collateralFactor, DEFAULT_COLLATERAL_FACTOR);
     }
-    
-    
 }
