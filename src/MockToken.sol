@@ -1,32 +1,55 @@
 // SPDX-License-Identifier: MIT
-pragma solidity 0.8.30;
+pragma solidity ^0.8.30;
 
-import "../lib/openzeppelin-contracts/contracts/token/ERC20/ERC20.sol";
-import "../lib/openzeppelin-contracts/contracts/access/Ownable.sol";
+import {ERC20} from "../lib/openzeppelin-contracts/contracts/token/ERC20/ERC20.sol";
+import {Ownable} from "../lib/openzeppelin-contracts/contracts/access/Ownable.sol";
 
 /**
  * @title MockToken
- * @dev Token ERC-20 mock to test the yield farming project
+ * @dev A simple ERC20 token for testing the lending protocol
  */
 contract MockToken is ERC20, Ownable {
+    uint8 private _decimals;
 
-    constructor(string memory name, string memory symbol, uint256 initialSupply) ERC20(name, symbol) Ownable(msg.sender) {
-        _mint(msg.sender, initialSupply * 10**decimals());
+    /**
+     * @dev Constructor to initialize the token
+     * @param name The name of the token
+     * @param symbol The symbol of the token
+     * @param decimals_ The number of decimals
+     * @param initialSupply The initial supply of tokens
+     */
+    constructor(
+        string memory name,
+        string memory symbol,
+        uint8 decimals_,
+        uint256 initialSupply
+    ) ERC20(name, symbol) Ownable(msg.sender) {
+        _decimals = decimals_;
+        _mint(msg.sender, initialSupply);
     }
 
     /**
-     * Function to mint tokens
-     * @param amount amount to mint
+     * @dev Mint new tokens (only owner)
+     * @param to The address to mint tokens to
+     * @param amount The amount to mint
      */
     function mint(address to, uint256 amount) external onlyOwner {
         _mint(to, amount);
     }
 
     /**
-     * Function to burn tokens
-     * @param amount amount to burn
+     * @dev Burn tokens from caller
+     * @param amount The amount to burn
      */
     function burn(uint256 amount) external {
         _burn(msg.sender, amount);
+    }
+
+    /**
+     * @dev Get the number of decimals
+     * @return The number of decimals
+     */
+    function decimals() public view virtual override returns (uint8) {
+        return _decimals;
     }
 }
