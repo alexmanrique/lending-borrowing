@@ -84,7 +84,7 @@ contract LendingProtocol is ReentrancyGuard, Pausable, Ownable {
         _onlyValidSignatureAfter();
     }
 
-    function _onlyValidSignatureBefore(SignatureData calldata sigData) internal view{
+    function _onlyValidSignatureBefore(SignatureData calldata sigData) internal view {
         require(block.timestamp <= sigData.deadline, "Signature expired");
         require(userNonces[msg.sender] == sigData.nonce, "Invalid nonce");
     }
