@@ -47,4 +47,26 @@ contract LendingProtocolTest is Test {
         assertEq(market.borrowRate, DEFAULT_BORROW_RATE);
         assertEq(market.collateralFactor, DEFAULT_COLLATERAL_FACTOR);
     }
+
+    function testUpdateMarketInvalidCollateralFactor() public {
+        lendingProtocol.addMarket(TEST_TOKEN_1, DEFAULT_COLLATERAL_FACTOR, DEFAULT_SUPPLY_RATE, DEFAULT_BORROW_RATE);
+        uint256 basisPoints = lendingProtocol.BASIS_POINTS();
+        uint256 invalidCollateralFactor = basisPoints + 1;
+        vm.expectRevert("Invalid collateral factor");
+        lendingProtocol.updateMarket(TEST_TOKEN_1, invalidCollateralFactor, DEFAULT_SUPPLY_RATE, DEFAULT_BORROW_RATE);
+    }
+
+    function testUpdateMarket() public {
+        lendingProtocol.addMarket(TEST_TOKEN_1, DEFAULT_COLLATERAL_FACTOR, DEFAULT_SUPPLY_RATE, DEFAULT_BORROW_RATE);
+        lendingProtocol.updateMarket(TEST_TOKEN_1, DEFAULT_COLLATERAL_FACTOR, DEFAULT_SUPPLY_RATE + 1, DEFAULT_BORROW_RATE + 1);
+        LendingProtocol.Market memory market = lendingProtocol.getMarket(address(TEST_TOKEN_1));
+        assertEq(market.isActive, true);
+        assertEq(market.totalSupply, 0);
+        assertEq(market.totalBorrow, 0);
+        assertEq(market.supplyRate, DEFAULT_SUPPLY_RATE + 1);
+        assertEq(market.borrowRate, DEFAULT_BORROW_RATE + 1);
+        assertEq(market.collateralFactor, DEFAULT_COLLATERAL_FACTOR);
+    }
+    
+    
 }
