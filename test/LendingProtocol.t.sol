@@ -15,6 +15,7 @@ contract LendingProtocolTest is Test {
 
     address public constant INVALID_TOKEN = address(0);
     address public constant USER_1 = address(2);
+    address public constant USER_2 = address(3);
 
     function setUp() public {
         lendingProtocol = new LendingProtocol();
@@ -261,5 +262,46 @@ contract LendingProtocolTest is Test {
         assertEq(user.isActive, false);
         assertEq(lendingProtocol.getMarket(address(testToken)).totalSupply, 1000);
         assertEq(lendingProtocol.getMarket(address(testToken)).totalBorrow, 0);
+    }
+
+    function testLiquidateInvalidAmount() public {
+        lendingProtocol.addMarket(
+            address(testToken), DEFAULT_COLLATERAL_FACTOR, DEFAULT_SUPPLY_RATE, DEFAULT_BORROW_RATE
+        );
+        vm.expectRevert("Amount must be greater than 0");
+        lendingProtocol.liquidate(USER_1, address(testToken), 0);
+    }
+
+    function testLiquidateInsufficientBorrow() public {
+        lendingProtocol.addMarket(
+            address(testToken), DEFAULT_COLLATERAL_FACTOR, DEFAULT_SUPPLY_RATE, DEFAULT_BORROW_RATE
+        );
+        vm.expectRevert("Insufficient borrow to liquidate");
+        lendingProtocol.liquidate(USER_1, address(testToken), 1000);
+    }
+
+    function testLiquidatePositionNotLiquidatable() public {
+        lendingProtocol.addMarket(
+            address(testToken), DEFAULT_COLLATERAL_FACTOR, DEFAULT_SUPPLY_RATE, DEFAULT_BORROW_RATE
+        );
+        testToken.mint(USER_1, 1000);
+        vm.startPrank(USER_1);
+        testToken.approve(address(lendingProtocol), 1000);
+        lendingProtocol.deposit(address(testToken), 1000);
+        lendingProtocol.borrow(address(testToken), 1000);
+        vm.stopPrank();
+        vm.expectRevert("Position is not liquidatable");
+        lendingProtocol.liquidate(USER_1, address(testToken), 1000);
+    }
+
+    function testPause() public {
+        lendingProtocol.pause();
+        assertTrue(lendingProtocol.paused());
+    }
+
+    function testUnpause() public {
+        lendingProtocol.pause();
+        lendingProtocol.unpause();
+        assertFalse(lendingProtocol.paused());
     }
 }
