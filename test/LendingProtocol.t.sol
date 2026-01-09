@@ -1,9 +1,12 @@
+// SPDX-License-Identifier: UNLICENSED
 pragma solidity ^0.8.30;
 
 import {Test} from "../lib/forge-std/src/Test.sol";
 import {LendingProtocol} from "../src/LendingProtocol.sol";
 import {MockToken} from "../src/MockToken.sol";
 import {IERC20} from "../lib/openzeppelin-contracts/contracts/token/ERC20/IERC20.sol";
+import {MessageHashUtils} from "../lib/openzeppelin-contracts/contracts/utils/cryptography/MessageHashUtils.sol";
+import {ECDSA} from "../lib/openzeppelin-contracts/contracts/utils/cryptography/ECDSA.sol";
 
 contract LendingProtocolTest is Test {
     LendingProtocol public lendingProtocol;
@@ -13,11 +16,17 @@ contract LendingProtocolTest is Test {
     uint256 public constant DEFAULT_SUPPLY_RATE = 10000; // 100% APY en basis points
     uint256 public constant DEFAULT_BORROW_RATE = 10000; // 100% APY en basis points
 
+    uint256 public constant USER_1_PRIVATE_KEY = 0x1111111111111111111111111111111111111111111111111111111111111111;
+    uint256 public constant USER_2_PRIVATE_KEY = 0x2222222222222222222222222222222222222222222222222222222222222222;
+
     address public constant INVALID_TOKEN = address(0);
-    address public constant USER_1 = address(2);
-    address public constant USER_2 = address(3);
+    address public USER_1;
+    address public USER_2;
 
     function setUp() public {
+        USER_1 = vm.addr(USER_1_PRIVATE_KEY);
+        USER_2 = vm.addr(USER_2_PRIVATE_KEY);
+
         lendingProtocol = new LendingProtocol();
         testToken = new MockToken("Test Token", "TEST", 18, 0);
         lendingProtocol.addMarket(
@@ -65,7 +74,6 @@ contract LendingProtocolTest is Test {
     }
 
     function testUpdateMarket() public {
-       
         lendingProtocol.updateMarket(
             address(testToken), DEFAULT_COLLATERAL_FACTOR, DEFAULT_SUPPLY_RATE + 1, DEFAULT_BORROW_RATE + 1
         );
@@ -125,7 +133,6 @@ contract LendingProtocolTest is Test {
     }
 
     function testWithdraw() public {
-       
         testToken.mint(USER_1, 1000);
         vm.startPrank(USER_1);
         testToken.approve(address(lendingProtocol), 1000);
@@ -263,4 +270,78 @@ contract LendingProtocolTest is Test {
         assertEq(lendingProtocol.getCollateralizationRatio(USER_1), 8000);
     }
 
+    function testDepositWithInvalidNonce() public {
+        vm.expectRevert("Invalid nonce");
+        lendingProtocol.depositWithSignature(
+            address(testToken), 1000, LendingProtocol.SignatureData(1, block.timestamp + 1, bytes(""))
+        );
+    }
+
+    function testDepositWithSignatureInvalidAmount() public {
+        vm.expectRevert("Amount must be greater than 0");
+        lendingProtocol.depositWithSignature(
+            address(testToken), 0, LendingProtocol.SignatureData(0, block.timestamp + 1, bytes(""))
+        );
+    }
+
+    function testDepositWithSignatureExpired() public {
+        vm.expectRevert("Signature expired");
+        lendingProtocol.depositWithSignature(
+            address(testToken), 1000, LendingProtocol.SignatureData(0, block.timestamp - 1, bytes(""))
+        );
+    }
+
+    function testDepositWithSignatureInvalidSignature() public {
+        uint256 nonce = 0;
+        uint256 deadline = block.timestamp + 1;
+        uint256 amount = 1000;
+        assertEq(USER_2, vm.addr(USER_2_PRIVATE_KEY));
+
+        bytes memory signature = _depositSignature(USER_2_PRIVATE_KEY, amount, nonce, deadline);
+
+        // But execute the call from USER_1 (msg.sender will be USER_1, not USER_2)
+        // The signature is valid but signed by USER_2, so it should fail
+        vm.prank(USER_1);
+        vm.expectRevert("Invalid signature");
+        lendingProtocol.depositWithSignature(
+            address(testToken), amount, LendingProtocol.SignatureData(nonce, deadline, signature)
+        );
+    }
+
+    function testDepositWithSignatureSuccessful() public {
+        uint256 nonce = 0;
+        uint256 deadline = block.timestamp + 1;
+        uint256 amount = 1000;
+
+        bytes memory signature = _depositSignature(USER_1_PRIVATE_KEY, amount, nonce, deadline);
+
+        testToken.mint(USER_1, 1000);
+        vm.startPrank(USER_1);
+        testToken.approve(address(lendingProtocol), 1000);
+
+        lendingProtocol.depositWithSignature(
+            address(testToken), 1000, LendingProtocol.SignatureData(0, block.timestamp + 1, signature)
+        );
+        vm.stopPrank();
+
+        LendingProtocol.User memory user = lendingProtocol.getUser(USER_1);
+        assertEq(user.totalDeposited, 1000);
+        assertEq(user.totalBorrowed, 0);
+        assertEq(user.lastUpdateTime, block.timestamp);
+        assertEq(user.isActive, true);
+        assertEq(lendingProtocol.getMarket(address(testToken)).totalSupply, 1000);
+        assertEq(lendingProtocol.getMarket(address(testToken)).totalBorrow, 0);
+    }
+
+    function _depositSignature(
+        uint256 privateKey,
+        uint256 amount,
+        uint256 nonce,
+        uint256 deadline
+    ) internal view returns (bytes memory) {
+        bytes32 messageHash = keccak256(abi.encodePacked("deposit", address(testToken), amount, nonce, deadline));
+        bytes32 ethSignedMessageHash = MessageHashUtils.toEthSignedMessageHash(messageHash);
+        (uint8 v, bytes32 r, bytes32 s) = vm.sign(privateKey, ethSignedMessageHash);
+        return abi.encodePacked(r, s, v);
+    }
 }
