@@ -204,15 +204,17 @@ contract LendingProtocolTest is Test {
     }
 
     function testBorrowSuccessful() public {
-        lendingProtocol.addMarket(address(testToken), DEFAULT_COLLATERAL_FACTOR, DEFAULT_SUPPLY_RATE, DEFAULT_BORROW_RATE);
+        lendingProtocol.addMarket(
+            address(testToken), DEFAULT_COLLATERAL_FACTOR, DEFAULT_SUPPLY_RATE, DEFAULT_BORROW_RATE
+        );
         testToken.mint(USER_1, 1000);
-        
+
         vm.startPrank(USER_1);
         testToken.approve(address(lendingProtocol), 1000);
         lendingProtocol.deposit(address(testToken), 1000);
         lendingProtocol.borrow(address(testToken), 1000);
         vm.stopPrank();
-        
+
         LendingProtocol.User memory user = lendingProtocol.getUser(USER_1);
         assertEq(user.totalDeposited, 1000);
         assertEq(user.totalBorrowed, 1000);
@@ -220,5 +222,44 @@ contract LendingProtocolTest is Test {
         assertEq(user.isActive, true);
         assertEq(lendingProtocol.getMarket(address(testToken)).totalSupply, 1000);
         assertEq(lendingProtocol.getMarket(address(testToken)).totalBorrow, 1000);
+    }
+
+    function testRepayInvalidAmount() public {
+        lendingProtocol.addMarket(
+            address(testToken), DEFAULT_COLLATERAL_FACTOR, DEFAULT_SUPPLY_RATE, DEFAULT_BORROW_RATE
+        );
+        vm.expectRevert("Amount must be greater than 0");
+        lendingProtocol.repay(address(testToken), 0);
+    }
+
+    function testRepayInsufficientBorrow() public {
+        lendingProtocol.addMarket(
+            address(testToken), DEFAULT_COLLATERAL_FACTOR, DEFAULT_SUPPLY_RATE, DEFAULT_BORROW_RATE
+        );
+        vm.expectRevert("Insufficient borrow");
+        lendingProtocol.repay(address(testToken), 1000);
+    }
+
+    function testRepay() public {
+        lendingProtocol.addMarket(
+            address(testToken), DEFAULT_COLLATERAL_FACTOR, DEFAULT_SUPPLY_RATE, DEFAULT_BORROW_RATE
+        );
+        testToken.mint(USER_1, 1000);
+        vm.startPrank(USER_1);
+        testToken.approve(address(lendingProtocol), 1000);
+        lendingProtocol.deposit(address(testToken), 1000);
+        lendingProtocol.borrow(address(testToken), 1000);
+
+        testToken.approve(address(lendingProtocol), 1000);
+        lendingProtocol.repay(address(testToken), 1000);
+        vm.stopPrank();
+
+        LendingProtocol.User memory user = lendingProtocol.getUser(USER_1);
+        assertEq(user.totalDeposited, 1000);
+        assertEq(user.totalBorrowed, 0);
+        assertEq(user.lastUpdateTime, block.timestamp);
+        assertEq(user.isActive, false);
+        assertEq(lendingProtocol.getMarket(address(testToken)).totalSupply, 1000);
+        assertEq(lendingProtocol.getMarket(address(testToken)).totalBorrow, 0);
     }
 }
