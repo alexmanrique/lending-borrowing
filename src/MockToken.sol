@@ -35,19 +35,4 @@ contract MockToken is ERC20, Ownable {
         _mint(to, amount);
     }
 
-    /**
-     * @dev Burn tokens from caller
-     * @param amount The amount to burn
-     */
-    function burn(uint256 amount) external {
-        _burn(msg.sender, amount);
-    }
-
-    /**
-     * @dev Get the number of decimals
-     * @return The number of decimals
-     */
-    function decimals() public view virtual override returns (uint8) {
-        return _decimals;
-    }
 }
