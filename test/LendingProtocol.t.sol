@@ -20,6 +20,9 @@ contract LendingProtocolTest is Test {
     function setUp() public {
         lendingProtocol = new LendingProtocol();
         testToken = new MockToken("Test Token", "TEST", 18, 0);
+        lendingProtocol.addMarket(
+            address(testToken), DEFAULT_COLLATERAL_FACTOR, DEFAULT_SUPPLY_RATE, DEFAULT_BORROW_RATE
+        );
     }
 
     function testAddMarketInvalidToken() public {
@@ -36,9 +39,6 @@ contract LendingProtocolTest is Test {
     }
 
     function testAddMarketMarketAlreadyExists() public {
-        lendingProtocol.addMarket(
-            address(testToken), DEFAULT_COLLATERAL_FACTOR, DEFAULT_SUPPLY_RATE, DEFAULT_BORROW_RATE
-        );
         vm.expectRevert("Market already exists");
         lendingProtocol.addMarket(
             address(testToken), DEFAULT_COLLATERAL_FACTOR, DEFAULT_SUPPLY_RATE, DEFAULT_BORROW_RATE
@@ -46,10 +46,6 @@ contract LendingProtocolTest is Test {
     }
 
     function testAddMarket() public {
-        lendingProtocol.addMarket(
-            address(testToken), DEFAULT_COLLATERAL_FACTOR, DEFAULT_SUPPLY_RATE, DEFAULT_BORROW_RATE
-        );
-
         LendingProtocol.Market memory market = lendingProtocol.getMarket(address(testToken));
         assertEq(market.isActive, true);
         assertEq(market.totalSupply, 0);
@@ -60,9 +56,6 @@ contract LendingProtocolTest is Test {
     }
 
     function testUpdateMarketInvalidCollateralFactor() public {
-        lendingProtocol.addMarket(
-            address(testToken), DEFAULT_COLLATERAL_FACTOR, DEFAULT_SUPPLY_RATE, DEFAULT_BORROW_RATE
-        );
         uint256 basisPoints = lendingProtocol.BASIS_POINTS();
         uint256 invalidCollateralFactor = basisPoints + 1;
         vm.expectRevert("Invalid collateral factor");
@@ -72,9 +65,7 @@ contract LendingProtocolTest is Test {
     }
 
     function testUpdateMarket() public {
-        lendingProtocol.addMarket(
-            address(testToken), DEFAULT_COLLATERAL_FACTOR, DEFAULT_SUPPLY_RATE, DEFAULT_BORROW_RATE
-        );
+       
         lendingProtocol.updateMarket(
             address(testToken), DEFAULT_COLLATERAL_FACTOR, DEFAULT_SUPPLY_RATE + 1, DEFAULT_BORROW_RATE + 1
         );
@@ -88,25 +79,17 @@ contract LendingProtocolTest is Test {
     }
 
     function testDepositInvalidAmount() public {
-        lendingProtocol.addMarket(
-            address(testToken), DEFAULT_COLLATERAL_FACTOR, DEFAULT_SUPPLY_RATE, DEFAULT_BORROW_RATE
-        );
         vm.expectRevert("Amount must be greater than 0");
         lendingProtocol.deposit(address(testToken), 0);
     }
 
     function testDeposit() public {
-        lendingProtocol.addMarket(
-            address(testToken), DEFAULT_COLLATERAL_FACTOR, DEFAULT_SUPPLY_RATE, DEFAULT_BORROW_RATE
-        );
-
         testToken.mint(USER_1, 1000);
 
-        vm.prank(USER_1);
+        vm.startPrank(USER_1);
         testToken.approve(address(lendingProtocol), 1000);
-
-        vm.prank(USER_1);
         lendingProtocol.deposit(address(testToken), 1000);
+        vm.stopPrank();
 
         LendingProtocol.User memory user = lendingProtocol.getUser(USER_1);
         assertEq(user.totalDeposited, 1000);
@@ -118,25 +101,16 @@ contract LendingProtocolTest is Test {
     }
 
     function testWithdrawInvalidAmount() public {
-        lendingProtocol.addMarket(
-            address(testToken), DEFAULT_COLLATERAL_FACTOR, DEFAULT_SUPPLY_RATE, DEFAULT_BORROW_RATE
-        );
         vm.expectRevert("Amount must be greater than 0");
         lendingProtocol.withdraw(address(testToken), 0);
     }
 
     function testWithdrawInsufficientDeposit() public {
-        lendingProtocol.addMarket(
-            address(testToken), DEFAULT_COLLATERAL_FACTOR, DEFAULT_SUPPLY_RATE, DEFAULT_BORROW_RATE
-        );
         vm.expectRevert("Insufficient deposit");
         lendingProtocol.withdraw(address(testToken), 1000);
     }
 
     function testWithdrawalWouldMakePositionUnsafe() public {
-        lendingProtocol.addMarket(
-            address(testToken), DEFAULT_COLLATERAL_FACTOR, DEFAULT_SUPPLY_RATE, DEFAULT_BORROW_RATE
-        );
         testToken.mint(USER_1, 1000);
         vm.startPrank(USER_1);
         testToken.approve(address(lendingProtocol), 1000);
@@ -151,9 +125,7 @@ contract LendingProtocolTest is Test {
     }
 
     function testWithdraw() public {
-        lendingProtocol.addMarket(
-            address(testToken), DEFAULT_COLLATERAL_FACTOR, DEFAULT_SUPPLY_RATE, DEFAULT_BORROW_RATE
-        );
+       
         testToken.mint(USER_1, 1000);
         vm.startPrank(USER_1);
         testToken.approve(address(lendingProtocol), 1000);
@@ -170,25 +142,16 @@ contract LendingProtocolTest is Test {
     }
 
     function testBorrowInvalidAmount() public {
-        lendingProtocol.addMarket(
-            address(testToken), DEFAULT_COLLATERAL_FACTOR, DEFAULT_SUPPLY_RATE, DEFAULT_BORROW_RATE
-        );
         vm.expectRevert("Amount must be greater than 0");
         lendingProtocol.borrow(address(testToken), 0);
     }
 
     function testBorrowInsufficientLiquidity() public {
-        lendingProtocol.addMarket(
-            address(testToken), DEFAULT_COLLATERAL_FACTOR, DEFAULT_SUPPLY_RATE, DEFAULT_BORROW_RATE
-        );
         vm.expectRevert("Insufficient liquidity");
         lendingProtocol.borrow(address(testToken), 1000);
     }
 
     function testBorrowWouldMakePositionUnsafe() public {
-        lendingProtocol.addMarket(
-            address(testToken), DEFAULT_COLLATERAL_FACTOR, DEFAULT_SUPPLY_RATE, DEFAULT_BORROW_RATE
-        );
         testToken.mint(USER_1, 1000);
         vm.startPrank(USER_1);
         testToken.approve(address(lendingProtocol), 1000);
@@ -205,9 +168,6 @@ contract LendingProtocolTest is Test {
     }
 
     function testBorrowSuccessful() public {
-        lendingProtocol.addMarket(
-            address(testToken), DEFAULT_COLLATERAL_FACTOR, DEFAULT_SUPPLY_RATE, DEFAULT_BORROW_RATE
-        );
         testToken.mint(USER_1, 1000);
 
         vm.startPrank(USER_1);
@@ -226,25 +186,16 @@ contract LendingProtocolTest is Test {
     }
 
     function testRepayInvalidAmount() public {
-        lendingProtocol.addMarket(
-            address(testToken), DEFAULT_COLLATERAL_FACTOR, DEFAULT_SUPPLY_RATE, DEFAULT_BORROW_RATE
-        );
         vm.expectRevert("Amount must be greater than 0");
         lendingProtocol.repay(address(testToken), 0);
     }
 
     function testRepayInsufficientBorrow() public {
-        lendingProtocol.addMarket(
-            address(testToken), DEFAULT_COLLATERAL_FACTOR, DEFAULT_SUPPLY_RATE, DEFAULT_BORROW_RATE
-        );
         vm.expectRevert("Insufficient borrow");
         lendingProtocol.repay(address(testToken), 1000);
     }
 
     function testRepay() public {
-        lendingProtocol.addMarket(
-            address(testToken), DEFAULT_COLLATERAL_FACTOR, DEFAULT_SUPPLY_RATE, DEFAULT_BORROW_RATE
-        );
         testToken.mint(USER_1, 1000);
         vm.startPrank(USER_1);
         testToken.approve(address(lendingProtocol), 1000);
@@ -265,25 +216,16 @@ contract LendingProtocolTest is Test {
     }
 
     function testLiquidateInvalidAmount() public {
-        lendingProtocol.addMarket(
-            address(testToken), DEFAULT_COLLATERAL_FACTOR, DEFAULT_SUPPLY_RATE, DEFAULT_BORROW_RATE
-        );
         vm.expectRevert("Amount must be greater than 0");
         lendingProtocol.liquidate(USER_1, address(testToken), 0);
     }
 
     function testLiquidateInsufficientBorrow() public {
-        lendingProtocol.addMarket(
-            address(testToken), DEFAULT_COLLATERAL_FACTOR, DEFAULT_SUPPLY_RATE, DEFAULT_BORROW_RATE
-        );
         vm.expectRevert("Insufficient borrow to liquidate");
         lendingProtocol.liquidate(USER_1, address(testToken), 1000);
     }
 
     function testLiquidatePositionNotLiquidatable() public {
-        lendingProtocol.addMarket(
-            address(testToken), DEFAULT_COLLATERAL_FACTOR, DEFAULT_SUPPLY_RATE, DEFAULT_BORROW_RATE
-        );
         testToken.mint(USER_1, 1000);
         vm.startPrank(USER_1);
         testToken.approve(address(lendingProtocol), 1000);
@@ -309,5 +251,16 @@ contract LendingProtocolTest is Test {
         vm.expectRevert("Invalid recipient");
         lendingProtocol.emergencyRecover(address(testToken), address(0), 1000);
     }
-    
+
+    function testCollateralizationRatio() public {
+        testToken.mint(USER_1, 1000);
+        vm.startPrank(USER_1);
+        testToken.approve(address(lendingProtocol), 1000);
+        lendingProtocol.deposit(address(testToken), 1000);
+        lendingProtocol.borrow(address(testToken), 1000);
+        vm.stopPrank();
+        lendingProtocol.getCollateralizationRatio(USER_1);
+        assertEq(lendingProtocol.getCollateralizationRatio(USER_1), 8000);
+    }
+
 }
