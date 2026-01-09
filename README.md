@@ -52,65 +52,15 @@ The main protocol contract that handles all lending and borrowing operations.
 
 A simple ERC20 token contract for testing purposes. Includes minting and burning functionality.
 
-## Installation
+## Test Coverage
 
-### Prerequisites
+Coverage measured with `forge test` (reported at `test/LendingProtocol.t.sol` run):
 
-- [Foundry](https://book.getfoundry.sh/getting-started/installation) installed
-- Solidity ^0.8.30
-
-### Setup
-
-1. Clone the repository:
-
-```bash
-git clone <repository-url>
-cd lending-borrowing
-```
-
-2. Install dependencies:
-
-```bash
-forge install
-```
-
-3. Build the contracts:
-
-```bash
-forge build
-```
-
-## Usage
-
-### Build
-
-```bash
-forge build
-```
-
-### Test
-
-```bash
-forge test
-```
-
-### Format
-
-```bash
-forge fmt
-```
-
-### Gas Snapshots
-
-```bash
-forge snapshot
-```
-
-### Deploy
-
-```bash
-forge script script/Deploy.s.sol:DeployScript --rpc-url <your_rpc_url> --private-key <your_private_key> --broadcast
-```
+| File                      | % Lines | % Statements | % Branches | % Funcs |
+| ------------------------- | ------- | ------------ | ---------- | ------- |
+| `src/LendingProtocol.sol` | 96.76%  | 97.83%       | 90.00%     | 85.19%  |
+| `src/MockToken.sol`       | 100.00% | 100.00%      | 100.00%    | 100.00% |
+| **Total**                 | 96.84%  | 97.86%       | 90.00%     | 86.21%  |
 
 ## Protocol Functions
 

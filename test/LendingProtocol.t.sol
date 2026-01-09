@@ -11,6 +11,7 @@ import {ECDSA} from "../lib/openzeppelin-contracts/contracts/utils/cryptography/
 contract LendingProtocolTest is Test {
     LendingProtocol public lendingProtocol;
     MockToken public usdc;
+    MockToken public dai;
 
     uint256 public constant DEFAULT_COLLATERAL_FACTOR = 8000; // 80% en basis points
     uint256 public constant DEFAULT_SUPPLY_RATE = 10000; // 100% APY en basis points
@@ -36,6 +37,7 @@ contract LendingProtocolTest is Test {
 
         lendingProtocol = new LendingProtocol();
         usdc = new MockToken("USDC", "USDC", 18, 0);
+        dai = new MockToken("DAI", "DAI", 18, 0);
         lendingProtocol.addMarket(
             address(usdc), DEFAULT_COLLATERAL_FACTOR, DEFAULT_SUPPLY_RATE, DEFAULT_BORROW_RATE
         );
@@ -62,13 +64,18 @@ contract LendingProtocolTest is Test {
     }
 
     function testAddMarket() public {
-        LendingProtocol.Market memory market = lendingProtocol.getMarket(address(usdc));
+        lendingProtocol.addMarket(address(dai), DEFAULT_COLLATERAL_FACTOR, DEFAULT_SUPPLY_RATE, DEFAULT_BORROW_RATE);
+
+        LendingProtocol.Market memory market = lendingProtocol.getMarket(address(dai));
         assertEq(market.isActive, true);
         assertEq(market.totalSupply, 0);
         assertEq(market.totalBorrow, 0);
         assertEq(market.supplyRate, DEFAULT_SUPPLY_RATE);
         assertEq(market.borrowRate, DEFAULT_BORROW_RATE);
         assertEq(market.collateralFactor, DEFAULT_COLLATERAL_FACTOR);
+
+        assertEq(lendingProtocol.supportedTokens(0), address(usdc));
+        assertEq(lendingProtocol.supportedTokens(1), address(dai));
     }
 
     function testUpdateMarketInvalidCollateralFactor() public {
@@ -197,6 +204,7 @@ contract LendingProtocolTest is Test {
         assertEq(user.isActive, true);
         assertEq(lendingProtocol.getMarket(address(usdc)).totalSupply, 1000);
         assertEq(lendingProtocol.getMarket(address(usdc)).totalBorrow, 1000);
+        assertEq(lendingProtocol.getUserBorrow(USER_1, address(usdc)), 1000);
     }
 
     function testRepayInvalidAmount() public {
@@ -264,6 +272,17 @@ contract LendingProtocolTest is Test {
     function testEmergencyRecoverRevertInvalidRecipient() public {
         vm.expectRevert("Invalid recipient");
         lendingProtocol.emergencyRecover(address(usdc), address(0), 1000);
+    }
+
+    function testEmergencyRecoverSuccess() public {
+        uint256 amount = 1000;
+        usdc.mint(address(lendingProtocol), amount);
+        address recipient = USER_2;
+
+        uint256 before = usdc.balanceOf(recipient);
+        lendingProtocol.emergencyRecover(address(usdc), recipient, amount);
+        assertEq(usdc.balanceOf(recipient), before + amount);
+        assertEq(usdc.balanceOf(address(lendingProtocol)), 0);
     }
 
     function testCollateralizationRatio() public {
@@ -338,9 +357,13 @@ contract LendingProtocolTest is Test {
         assertEq(user.isActive, true);
         assertEq(lendingProtocol.getMarket(address(usdc)).totalSupply, 1000);
         assertEq(lendingProtocol.getMarket(address(usdc)).totalBorrow, 0);
+
+        assertEq(lendingProtocol.getNonce(USER_1), 1);
     }
 
     function testLiquidationSuccessfull() public {
+
+        lendingProtocol.addMarket(address(dai), DEFAULT_COLLATERAL_FACTOR, DEFAULT_SUPPLY_RATE, DEFAULT_BORROW_RATE);
         // User1 deposits test token
         usdc.mint(USER_1, DEPOSIT_AMOUNT);
         vm.startPrank(USER_1);
