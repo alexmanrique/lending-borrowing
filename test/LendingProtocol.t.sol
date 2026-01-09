@@ -304,4 +304,10 @@ contract LendingProtocolTest is Test {
         lendingProtocol.unpause();
         assertFalse(lendingProtocol.paused());
     }
+
+    function testEmergencyRecoverRevertInvalidRecipient() public {
+        vm.expectRevert("Invalid recipient");
+        lendingProtocol.emergencyRecover(address(testToken), address(0), 1000);
+    }
+    
 }
