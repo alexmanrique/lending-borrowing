@@ -38,9 +38,7 @@ contract LendingProtocolTest is Test {
         lendingProtocol = new LendingProtocol();
         usdc = new MockToken("USDC", "USDC", 18, 0);
         dai = new MockToken("DAI", "DAI", 18, 0);
-        lendingProtocol.addMarket(
-            address(usdc), DEFAULT_COLLATERAL_FACTOR, DEFAULT_SUPPLY_RATE, DEFAULT_BORROW_RATE
-        );
+        lendingProtocol.addMarket(address(usdc), DEFAULT_COLLATERAL_FACTOR, DEFAULT_SUPPLY_RATE, DEFAULT_BORROW_RATE);
     }
 
     function testAddMarketInvalidToken() public {
@@ -58,9 +56,7 @@ contract LendingProtocolTest is Test {
 
     function testAddMarketMarketAlreadyExists() public {
         vm.expectRevert("Market already exists");
-        lendingProtocol.addMarket(
-            address(usdc), DEFAULT_COLLATERAL_FACTOR, DEFAULT_SUPPLY_RATE, DEFAULT_BORROW_RATE
-        );
+        lendingProtocol.addMarket(address(usdc), DEFAULT_COLLATERAL_FACTOR, DEFAULT_SUPPLY_RATE, DEFAULT_BORROW_RATE);
     }
 
     function testAddMarket() public {
@@ -82,9 +78,7 @@ contract LendingProtocolTest is Test {
         uint256 basisPoints = lendingProtocol.BASIS_POINTS();
         uint256 invalidCollateralFactor = basisPoints + 1;
         vm.expectRevert("Invalid collateral factor");
-        lendingProtocol.updateMarket(
-            address(usdc), invalidCollateralFactor, DEFAULT_SUPPLY_RATE, DEFAULT_BORROW_RATE
-        );
+        lendingProtocol.updateMarket(address(usdc), invalidCollateralFactor, DEFAULT_SUPPLY_RATE, DEFAULT_BORROW_RATE);
     }
 
     function testUpdateMarket() public {
@@ -362,7 +356,6 @@ contract LendingProtocolTest is Test {
     }
 
     function testLiquidationSuccessfull() public {
-
         lendingProtocol.addMarket(address(dai), DEFAULT_COLLATERAL_FACTOR, DEFAULT_SUPPLY_RATE, DEFAULT_BORROW_RATE);
         // User1 deposits test token
         usdc.mint(USER_1, DEPOSIT_AMOUNT);
